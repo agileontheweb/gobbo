@@ -1,32 +1,87 @@
 let recorder;
 let chunks = [];
-let scrollInterval;
+let scripts = JSON.parse(localStorage.getItem('my_monologues')) || {};
 
 const setupScreen = document.getElementById('setup-screen');
 const recScreen = document.getElementById('recording-screen');
 const prompterText = document.getElementById('prompter-text');
 const prompterOverlay = document.getElementById('prompter-overlay');
 const fontSizeInput = document.getElementById('font-size');
-const scrollSpeedInput = document.getElementById('scroll-speed');
+const titleInput = document.getElementById('script-title');
+const textArea = document.getElementById('input-text');
+const selector = document.getElementById('script-selector');
 
-// Aggiorna UI setup in tempo reale
+// Inizializzazione
+updateSelector();
+
 fontSizeInput.oninput = () => document.getElementById('font-val').innerText = fontSizeInput.value + "px";
-scrollSpeedInput.oninput = () => document.getElementById('speed-val').innerText = scrollSpeedInput.value + "x";
+
+// Cambia script dal menu a tendina
+selector.onchange = () => {
+  const selectedTitle = selector.value;
+  if (selectedTitle && scripts[selectedTitle]) {
+    titleInput.value = selectedTitle;
+    textArea.value = scripts[selectedTitle];
+  } else {
+    titleInput.value = "";
+    textArea.value = "";
+  }
+};
+
+function saveCurrentScript() {
+  const title = titleInput.value.trim();
+  const content = textArea.value.trim();
+
+  if (!title || !content) {
+    alert("Inserisci titolo e testo prima di salvare!");
+    return;
+  }
+
+  scripts[title] = content;
+  localStorage.setItem('my_monologues', JSON.stringify(scripts));
+  updateSelector();
+  selector.value = title;
+  alert("Salvato correttamente!");
+}
+
+function deleteScript() {
+  const title = selector.value;
+  if (!title) return;
+
+  if (confirm(`Vuoi davvero eliminare "${title}"?`)) {
+    delete scripts[title];
+    localStorage.setItem('my_monologues', JSON.stringify(scripts));
+    titleInput.value = "";
+    textArea.value = "";
+    updateSelector();
+  }
+}
+
+function updateSelector() {
+  selector.innerHTML = '<option value="">-- Seleziona o crea nuovo --</option>';
+  Object.keys(scripts).forEach(title => {
+    const opt = document.createElement('option');
+    opt.value = title;
+    opt.innerText = title;
+    selector.appendChild(opt);
+  });
+}
 
 async function startApp() {
-  const text = document.getElementById('input-text').value;
-  if (!text) return alert("Inserisci del testo!");
+  if (!textArea.value.trim()) return alert("Incolla un testo!");
 
-  prompterText.innerText = text;
+  // Salva automaticamente prima di avviare
+  if (titleInput.value.trim()) {
+    scripts[titleInput.value.trim()] = textArea.value;
+    localStorage.setItem('my_monologues', JSON.stringify(scripts));
+  }
+
+  prompterText.innerText = textArea.value;
   prompterText.style.fontSize = fontSizeInput.value + "px";
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user" },
-      audio: true
-    });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     document.getElementById('preview').srcObject = stream;
-
     recorder = new MediaRecorder(stream);
     recorder.ondataavailable = e => chunks.push(e.data);
     recorder.onstop = saveVideo;
@@ -40,26 +95,15 @@ async function startApp() {
 
 function toggleRecord() {
   const btn = document.getElementById('recBtn');
-
   if (recorder.state === "inactive") {
-    // START RECORDING
     chunks = [];
     recorder.start();
     btn.innerText = "STOP";
     btn.classList.add('is-recording');
-
-    // Start Auto-Scroll
-    const speed = parseInt(scrollSpeedInput.value);
-    scrollInterval = setInterval(() => {
-      prompterOverlay.scrollTop += speed;
-    }, 40);
-
   } else {
-    // STOP RECORDING
     recorder.stop();
     btn.innerText = "REC";
     btn.classList.remove('is-recording');
-    clearInterval(scrollInterval);
   }
 }
 
@@ -68,14 +112,17 @@ function saveVideo() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `gobbo_${new Date().getTime()}.mp4`;
+  a.download = `video_${new Date().getTime()}.mp4`;
   a.click();
 }
 
-function toggleMirror() {
-  prompterText.classList.toggle('mirror-text');
-}
-
 function exitApp() {
-  location.reload();
+  // Invece di reload, torniamo semplicemente alla schermata precedente
+  // Così non perdiamo lo stato delle variabili
+  const stream = document.getElementById('preview').srcObject;
+  if (stream) stream.getTracks().forEach(track => track.stop());
+
+  recScreen.classList.add('hidden');
+  setupScreen.classList.remove('hidden');
+  updateSelector();
 }

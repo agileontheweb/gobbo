@@ -4,61 +4,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Teleprompter Pro</title>
+    <title>Teleprompter Pro - I Miei Monologhi</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body class="bg-[#121212] text-white font-sans h-screen overflow-hidden">
 
-    <div id="setup-screen" class="flex flex-col h-full p-6 gap-6">
-        <h1 class="text-2xl font-bold text-green-400">Configura Teleprompter</h1>
+    <div id="setup-screen" class="flex flex-col h-full p-6 gap-4 max-w-3xl mx-auto">
+        <h1 class="text-2xl font-bold text-green-400">I Miei Monologhi</h1>
+
+        <div class="flex gap-2">
+            <select id="script-selector"
+                class="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg p-2 outline-none focus:ring-2 focus:ring-green-500">
+                <option value="">-- Seleziona o crea nuovo --</option>
+            </select>
+            <button onclick="deleteScript()"
+                class="bg-red-900/50 hover:bg-red-600 text-red-200 p-2 rounded-lg transition-colors">
+                Elimina
+            </button>
+        </div>
+
+        <input type="text" id="script-title"
+            class="bg-zinc-900 border border-zinc-700 rounded-lg p-3 outline-none focus:ring-2 focus:ring-green-500"
+            placeholder="Titolo del monologo...">
 
         <textarea id="input-text"
-            class="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl p-4 text-lg focus:ring-2 focus:ring-green-500 outline-none"
-            placeholder="Incolla qui il tuo script..."></textarea>
+            class="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl p-4 text-lg focus:ring-2 focus:ring-green-500 outline-none resize-none"
+            placeholder="Scrivi o incolla qui il tuo testo..."></textarea>
 
-        <div class="space-y-4 bg-zinc-900 p-4 rounded-xl border border-zinc-800">
-            <div class="flex items-center gap-4">
-                <label class="w-32 text-sm font-medium">Font Size:</label>
-                <input type="range" id="font-size" min="20" max="100" value="45" class="flex-1 accent-green-500">
-                <span id="font-val" class="w-12 text-right text-green-400 font-mono">45px</span>
-            </div>
-            <div class="flex items-center gap-4">
-                <label class="w-32 text-sm font-medium">Velocità:</label>
-                <input type="range" id="scroll-speed" min="1" max="10" value="3" class="flex-1 accent-green-500">
-                <span id="speed-val" class="w-12 text-right text-green-400 font-mono">3x</span>
+        <div class="grid grid-cols-2 gap-4 bg-zinc-900 p-4 rounded-xl border border-zinc-800">
+            <div class="flex flex-col gap-2 col-span-2">
+                <label class="text-xs uppercase text-zinc-500 font-bold">Grandezza Font</label>
+                <div class="flex items-center gap-4">
+                    <input type="range" id="font-size" min="20" max="120" value="45" class="flex-1 accent-green-500">
+                    <span id="font-val" class="w-12 text-right text-green-400 font-mono">45px</span>
+                </div>
             </div>
         </div>
 
-        <button onclick="startApp()"
-            class="bg-green-500 hover:bg-green-600 text-black font-bold py-4 rounded-xl transition-all uppercase tracking-wider">
-            Avvia Teleprompter
-        </button>
+        <div class="flex gap-3">
+            <button onclick="saveCurrentScript()"
+                class="flex-1 bg-zinc-700 hover:bg-zinc-600 font-bold py-4 rounded-xl transition-all uppercase text-sm">
+                Salva Bozza
+            </button>
+            <button onclick="startApp()"
+                class="flex-[2] bg-green-500 hover:bg-green-600 text-black font-bold py-4 rounded-xl transition-all uppercase tracking-wider">
+                Avvia Teleprompter
+            </button>
+        </div>
     </div>
 
-    <div id="recording-screen" class="hidden relative h-full w-full">
+    <div id="recording-screen" class="hidden relative h-full w-full bg-black">
         <video id="preview" autoplay muted playsinline
-            class="absolute inset-0 w-full h-full object-cover scale-x-[-1]"></video>
+            class="absolute inset-0 w-full h-full object-cover scale-x-[-1] opacity-60"></video>
 
         <div id="prompter-overlay"
-            class="absolute inset-0 z-10 overflow-y-auto scroll-smooth py-[50vh] px-8 text-center bg-black/30">
-            <div id="prompter-text" class="leading-relaxed font-bold drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)]"></div>
+            class="absolute inset-0 z-10 overflow-y-auto py-[50vh] px-8 text-center scroll-smooth">
+            <div id="prompter-text" class="leading-relaxed font-bold drop-shadow-[0_2px_8px_rgba(0,0,0,1)]"></div>
         </div>
 
-        <div class="absolute bottom-8 left-0 right-0 z-20 flex justify-center items-center gap-4 px-4">
+        <div class="absolute bottom-8 left-0 right-0 z-20 flex justify-center items-center gap-6 pointer-events-none">
             <button id="recBtn" onclick="toggleRecord()"
-                class="bg-red-500 hover:bg-red-600 text-white px-8 py-3 rounded-full font-bold shadow-xl transition-all active:scale-95">REC</button>
-            <button onclick="toggleMirror()"
-                class="bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-                    stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                </svg>
-            </button>
+                class="pointer-events-auto bg-red-600 text-white px-10 py-4 rounded-full font-bold shadow-2xl transition-all active:scale-95">REC</button>
             <button onclick="exitApp()"
-                class="bg-zinc-700 hover:bg-zinc-800 text-white p-3 rounded-full shadow-lg">ESCI</button>
+                class="pointer-events-auto bg-zinc-800 text-white px-6 py-4 rounded-full font-bold shadow-lg">CHIUDI</button>
         </div>
     </div>
 
