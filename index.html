@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mio Teleprompter Personale</title>
+    <style>
+        :root { --bg: #121212; --accent: #00e676; }
+        body { margin: 0; background: var(--bg); color: white; font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; }
+        
+        /* Schermata Iniziale */
+        #setup-screen { padding: 20px; display: flex; flex-direction: column; gap: 15px; flex: 1; }
+        textarea { flex: 1; background: #222; color: white; border: 1px solid #444; border-radius: 8px; padding: 10px; font-size: 16px; }
+        .config-row { display: flex; align-items: center; gap: 10px; }
+        input[type="range"] { flex: 1; }
+
+        /* Schermata Registrazione */
+        #recording-screen { display: none; position: relative; flex: 1; overflow: hidden; }
+        video { width: 100%; height: 100%; object-fit: cover; position: absolute; z-index: 1; background: #000; }
+        
+        /* Area Testo con Scorrimento Manuale */
+        #prompter-overlay { 
+            position: absolute; z-index: 2; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.3); overflow-y: scroll; padding: 50vh 20px; 
+            text-align: center; scroll-behavior: smooth;
+        }
+        #prompter-text { line-height: 1.5; text-shadow: 2px 2px 4px #000; }
+
+        /* Bottoni */
+        .btn { background: var(--accent); color: black; border: none; padding: 15px; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; }
+        .btn-red { background: #ff5252; color: white; }
+        .controls { position: fixed; bottom: 20px; left: 0; right: 0; z-index: 10; display: flex; justify-content: center; gap: 10px; pointer-events: none; }
+        .controls button { pointer-events: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        
+        .mirror { transform: scaleX(-1); }
+    </style>
+</head>
+<body>
+
+<div id="setup-screen">
+    <h2>Configura Teleprompter</h2>
+    <textarea id="input-text" placeholder="Incolla qui il tuo testo..."></textarea>
+    
+    <div class="config-row">
+        <label>Grandezza Font:</label>
+        <input type="range" id="font-size" min="20" max="80" value="40">
+        <span id="font-val">40px</span>
+    </div>
+
+    <button class="btn" onclick="startApp()">VAI AL TELEPROMPTER</button>
+</div>
+
+<div id="recording-screen">
+    <video id="preview" autoplay muted playsinline></video>
+    <div id="prompter-overlay">
+        <div id="prompter-text"></div>
+    </div>
+
+    <div class="controls">
+        <button id="recBtn" class="btn btn-red" onclick="toggleRecord()">REC</button>
+        <button class="btn" style="background:#555; color:white;" onclick="exitApp()">ESCI</button>
+        <button class="btn" style="background:#2196F3; color:white;" onclick="toggleMirror()">MIRROR</button>
+    </div>
+</div>
+
+<script>
+    let recorder;
+    let chunks = [];
+    const setupScreen = document.getElementById('setup-screen');
+    const recScreen = document.getElementById('recording-screen');
+    const prompterText = document.getElementById('prompter-text');
+    const fontSizeInput = document.getElementById('font-size');
+    const fontVal = document.getElementById('font-val');
+
+    // Aggiorna etichetta font
+    fontSizeInput.oninput = () => fontVal.innerText = fontSizeInput.value + "px";
+
+    async function startApp() {
+        const text = document.getElementById('input-text').value;
+        if(!text) { alert("Inserisci del testo!"); return; }
+
+        // Configura testo
+        prompterText.innerText = text;
+        prompterText.style.fontSize = fontSizeInput.value + "px";
+
+        // Attiva Camera
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "user" }, 
+                audio: true 
+            });
+            document.getElementById('preview').srcObject = stream;
+            
+            recorder = new MediaRecorder(stream);
+            recorder.ondataavailable = e => chunks.push(e.data);
+            recorder.onstop = saveVideo;
+
+            setupScreen.style.display = 'none';
+            recScreen.style.display = 'flex';
+        } catch (err) {
+            alert("Errore accesso camera: " + err);
+        }
+    }
+
+    function toggleRecord() {
+        const btn = document.getElementById('recBtn');
+        if (recorder.state === "inactive") {
+            chunks = [];
+            recorder.start();
+            btn.innerText = "STOP";
+            btn.style.animation = "pulse 1s infinite";
+        } else {
+            recorder.stop();
+            btn.innerText = "REC";
+            btn.style.animation = "none";
+        }
+    }
+
+    function saveVideo() {
+        const blob = new Blob(chunks, { type: 'video/mp4' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `video_${new Date().getTime()}.mp4`;
+        a.click();
+    }
+
+    function toggleMirror() {
+        prompterText.classList.toggle('mirror');
+    }
+
+    function exitApp() {
+        location.reload(); // Torna al setup
+    }
+</script>
+
+<style>
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.1); opacity: 0.8; }
+        100% { transform: scale(1); }
+    }
+</style>
+
+</body>
+</html>
