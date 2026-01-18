@@ -6,17 +6,24 @@ const setupScreen = document.getElementById('setup-screen');
 const recScreen = document.getElementById('recording-screen');
 const prompterText = document.getElementById('prompter-text');
 const prompterOverlay = document.getElementById('prompter-overlay');
-const fontSizeInput = document.getElementById('font-size');
+const liveFontInput = document.getElementById('live-font-size');
+const liveFontVal = document.getElementById('live-font-val');
 const titleInput = document.getElementById('script-title');
 const textArea = document.getElementById('input-text');
 const selector = document.getElementById('script-selector');
 
-// Inizializzazione
+// Carica script iniziale
 updateSelector();
 
-fontSizeInput.oninput = () => document.getElementById('font-val').innerText = fontSizeInput.value + "px";
+// Gestione Font Live
+liveFontInput.oninput = () => {
+  const size = liveFontInput.value + "px";
+  prompterText.style.fontSize = size;
+  liveFontVal.innerText = size;
+  localStorage.setItem('preferred_font_size', liveFontInput.value);
+};
 
-// Cambia script dal menu a tendina
+// Selettore Monologhi
 selector.onchange = () => {
   const selectedTitle = selector.value;
   if (selectedTitle && scripts[selectedTitle]) {
@@ -31,35 +38,29 @@ selector.onchange = () => {
 function saveCurrentScript() {
   const title = titleInput.value.trim();
   const content = textArea.value.trim();
-
-  if (!title || !content) {
-    alert("Inserisci titolo e testo prima di salvare!");
-    return;
-  }
+  if (!title || !content) return alert("Inserisci titolo e testo!");
 
   scripts[title] = content;
   localStorage.setItem('my_monologues', JSON.stringify(scripts));
   updateSelector();
   selector.value = title;
-  alert("Salvato correttamente!");
+  alert("Monologo salvato!");
 }
 
 function deleteScript() {
   const title = selector.value;
-  if (!title) return;
+  if (!title || !confirm(`Eliminare "${title}"?`)) return;
 
-  if (confirm(`Vuoi davvero eliminare "${title}"?`)) {
-    delete scripts[title];
-    localStorage.setItem('my_monologues', JSON.stringify(scripts));
-    titleInput.value = "";
-    textArea.value = "";
-    updateSelector();
-  }
+  delete scripts[title];
+  localStorage.setItem('my_monologues', JSON.stringify(scripts));
+  titleInput.value = "";
+  textArea.value = "";
+  updateSelector();
 }
 
 function updateSelector() {
-  selector.innerHTML = '<option value="">-- Seleziona o crea nuovo --</option>';
-  Object.keys(scripts).forEach(title => {
+  selector.innerHTML = '<option value="">-- Carica un monologo --</option>';
+  Object.keys(scripts).sort().forEach(title => {
     const opt = document.createElement('option');
     opt.value = title;
     opt.innerText = title;
@@ -68,20 +69,28 @@ function updateSelector() {
 }
 
 async function startApp() {
-  if (!textArea.value.trim()) return alert("Incolla un testo!");
+  if (!textArea.value.trim()) return alert("Inserisci un testo!");
 
-  // Salva automaticamente prima di avviare
+  // Autosave prima di partire
   if (titleInput.value.trim()) {
     scripts[titleInput.value.trim()] = textArea.value;
     localStorage.setItem('my_monologues', JSON.stringify(scripts));
   }
 
+  // Configura UI
   prompterText.innerText = textArea.value;
-  prompterText.style.fontSize = fontSizeInput.value + "px";
+  const savedSize = localStorage.getItem('preferred_font_size') || 45;
+  liveFontInput.value = savedSize;
+  prompterText.style.fontSize = savedSize + "px";
+  liveFontVal.innerText = savedSize + "px";
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user" },
+      audio: true
+    });
     document.getElementById('preview').srcObject = stream;
+
     recorder = new MediaRecorder(stream);
     recorder.ondataavailable = e => chunks.push(e.data);
     recorder.onstop = saveVideo;
@@ -89,7 +98,7 @@ async function startApp() {
     setupScreen.classList.add('hidden');
     recScreen.classList.remove('hidden');
   } catch (err) {
-    alert("Errore camera: " + err);
+    alert("Accesso camera negato: " + err);
   }
 }
 
@@ -112,17 +121,17 @@ function saveVideo() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `video_${new Date().getTime()}.mp4`;
+  a.download = `monologo_${new Date().getTime()}.mp4`;
   a.click();
 }
 
+function toggleMirror() {
+  prompterText.classList.toggle('mirror-text');
+}
+
 function exitApp() {
-  // Invece di reload, torniamo semplicemente alla schermata precedente
-  // Così non perdiamo lo stato delle variabili
   const stream = document.getElementById('preview').srcObject;
   if (stream) stream.getTracks().forEach(track => track.stop());
-
   recScreen.classList.add('hidden');
   setupScreen.classList.remove('hidden');
-  updateSelector();
 }

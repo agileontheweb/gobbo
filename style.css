@@ -1,18 +1,34 @@
+/* Nascondi scrollbar */
 #prompter-overlay::-webkit-scrollbar { display: none; }
 #prompter-overlay { -ms-overflow-style: none; scrollbar-width: none; }
 
+/* Animazione REC */
 .is-recording {
     animation: pulse 1.5s infinite linear;
-    background-color: #ef4444 !important;
 }
 
 @keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-    100% { transform: scale(1); }
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.05); opacity: 0.8; }
+    100% { transform: scale(1); opacity: 1; }
 }
 
-/* Evita che il video copra troppo il testo */
+/* FIX VISIBILITÀ: Video a piena luminosità */
 video {
-    filter: brightness(0.4) contrast(1.2);
+    filter: none !important; /* Rimuove ogni filtro scuro */
+    object-fit: cover;
+}
+
+/* Gradiente per proteggere la leggibilità del testo senza scurire tutto il video */
+#recording-screen::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.7) 100%);
+    pointer-events: none;
+    z-index: 5;
+}
+
+#prompter-overlay {
+    z-index: 10;
 }
