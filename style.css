@@ -1,0 +1,26 @@
+/* Nascondi scrollbar per un look pulito */
+#prompter-overlay::-webkit-scrollbar {
+    display: none;
+}
+
+#prompter-overlay {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* Effetto Specchio per il testo (opzionale) */
+.mirror-text {
+    transform: scaleX(-1);
+}
+
+/* Animazione pulsante REC */
+.is-recording {
+    animation: pulse 1.5s infinite linear;
+    background-color: #ef4444 !important;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+    70% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
