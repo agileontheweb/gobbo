@@ -3,7 +3,9 @@ let chunks = [];
 let scripts = JSON.parse(localStorage.getItem('my_monologues')) || {};
 let isRecording = false;
 let mediaStream = null;
+let canvasStream = null;
 let animationId = null;
+let videoElement = null;
 
 // Elementi DOM
 const setupScreen = document.getElementById('setup-screen');
@@ -104,14 +106,12 @@ async function startApp() {
   liveFontVal.innerText = savedSize + "px";
 
   try {
-    // 🇮🇹 SOLUZIONE: Registra direttamente dalla camera in 9:16
-    // Chiediamo alla camera di registrare in verticale (9:16)
+    // 1. Ottieni stream dalla camera (in 16:9 o qualsiasi formato)
     mediaStream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: "user",
-        width: { ideal: 720 },
-        height: { ideal: 1280 }, // 9:16 ratio
-        aspectRatio: 9 / 16
+        width: { ideal: 640 },
+        height: { ideal: 480 }
       },
       audio: {
         echoCancellation: true,
@@ -120,10 +120,75 @@ async function startApp() {
       }
     });
 
-    // Preview direttamente dalla camera (senza canvas!)
-    preview.srcObject = mediaStream;
+    // 2. Crea elemento video nascosto
+    videoElement = document.createElement('video');
+    videoElement.srcObject = mediaStream;
+    videoElement.setAttribute('playsinline', '');
+    videoElement.muted = true;
+    await videoElement.play();
 
-    // Crea recorder direttamente dallo stream della camera
+    // 3. Canvas in 9:16 (VERTICALE) - risoluzione ridotta per performance
+    const canvas = document.createElement('canvas');
+    const CANVAS_WIDTH = 540;   // 9:16 ratio
+    const CANVAS_HEIGHT = 960;
+    canvas.width = CANVAS_WIDTH;
+    canvas.height = CANVAS_HEIGHT;
+    const ctx = canvas.getContext('2d');
+
+    // 4. Stream dal canvas
+    canvasStream = canvas.captureStream(30);
+
+    // 5. COPIA l'audio
+    const audioTracks = mediaStream.getAudioTracks();
+    audioTracks.forEach(track => canvasStream.addTrack(track));
+
+    // 6. Funzione che disegna il video in verticale
+    function drawFrame() {
+      if (!videoElement || !videoElement.videoWidth) {
+        animationId = requestAnimationFrame(drawFrame);
+        return;
+      }
+
+      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+      // Calcola il crop per riempire il 9:16
+      const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
+      const canvasAspect = CANVAS_WIDTH / CANVAS_HEIGHT;
+
+      let sx, sy, sw, sh;
+
+      if (videoAspect > canvasAspect) {
+        // Video più largo: taglia i lati
+        sh = videoElement.videoHeight;
+        sw = videoElement.videoHeight * canvasAspect;
+        sx = (videoElement.videoWidth - sw) / 2;
+        sy = 0;
+      } else {
+        // Video più alto: taglia sopra/sotto
+        sw = videoElement.videoWidth;
+        sh = videoElement.videoWidth / canvasAspect;
+        sx = 0;
+        sy = (videoElement.videoHeight - sh) / 2;
+      }
+
+      // Disegna il video nel canvas (verticale 9:16)
+      ctx.drawImage(videoElement, sx, sy, sw, sh, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+      animationId = requestAnimationFrame(drawFrame);
+    }
+
+    // 7. Avvia il disegno
+    drawFrame();
+
+    // 8. Crea lo stream combinato (video dal canvas + audio originale)
+    const combinedStream = new MediaStream();
+    combinedStream.addTrack(canvasStream.getVideoTracks()[0]);
+    const audioTrack = mediaStream.getAudioTracks()[0];
+    if (audioTrack) {
+      combinedStream.addTrack(audioTrack.clone());
+    }
+
+    // 9. Crea il recorder
     let mimeType = 'video/mp4';
     if (!MediaRecorder.isTypeSupported('video/mp4')) {
       mimeType = 'video/webm;codecs=vp9,opus';
@@ -132,9 +197,9 @@ async function startApp() {
       }
     }
 
-    recorder = new MediaRecorder(mediaStream, {
+    recorder = new MediaRecorder(combinedStream, {
       mimeType: mimeType,
-      videoBitsPerSecond: 5000000, // 5 Mbps per qualità decente
+      videoBitsPerSecond: 3000000, // 3 Mbps per performance
       audioBitsPerSecond: 128000
     });
 
@@ -146,11 +211,18 @@ async function startApp() {
       saveVideo();
     };
 
+    // 10. Preview (mostra il canvas in 9:16)
+    preview.srcObject = canvasStream;
+
     setupScreen.classList.add('hidden');
     recScreen.classList.remove('hidden');
     isRecording = false;
     recBtn.innerText = "REC";
     recBtn.classList.remove('is-recording');
+
+    // Salva riferimenti per cleanup
+    window._canvasElement = canvas;
+    window._combinedStream = combinedStream;
 
   } catch (err) {
     alert("Errore accesso camera/microfono: " + err.message);
@@ -168,7 +240,7 @@ function toggleRecord() {
       recBtn.innerText = "STOP";
       recBtn.classList.add('is-recording');
       isRecording = true;
-      console.log('📹 Registrazione 9:16 iniziata!');
+      console.log('📹 Registrazione 9:16 FORZATA iniziata!');
     } catch (e) {
       console.error('Errore start registrazione:', e);
     }
@@ -198,7 +270,7 @@ function saveVideo() {
   }
 
   const blob = new Blob(chunks, { type: mimeType });
-  console.log(`📊 Video salvato: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
+  console.log(`📊 Video salvato: ${(blob.size / 1024 / 1024).toFixed(2)} MB - FORMATO 9:16 VERTICALE`);
 
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -211,7 +283,7 @@ function saveVideo() {
   document.body.removeChild(a);
 
   setTimeout(() => URL.revokeObjectURL(url), 10000);
-  showNotification(`✅ Video salvato in 9:16!`);
+  showNotification(`✅ Video salvato in 9:16 VERTICALE!`);
 
   chunks = [];
 }
@@ -221,15 +293,38 @@ function toggleMirror() {
 }
 
 function exitApp() {
+  // Ferma il loop
+  if (animationId) {
+    cancelAnimationFrame(animationId);
+    animationId = null;
+  }
+
   if (recorder && recorder.state !== "inactive") {
     try {
       recorder.stop();
     } catch (e) { }
   }
 
+  // Pulisci combined stream
+  if (window._combinedStream) {
+    window._combinedStream.getTracks().forEach(track => track.stop());
+    window._combinedStream = null;
+  }
+
+  if (canvasStream) {
+    canvasStream.getTracks().forEach(track => track.stop());
+    canvasStream = null;
+  }
+
   if (mediaStream) {
     mediaStream.getTracks().forEach(track => track.stop());
     mediaStream = null;
+  }
+
+  if (videoElement) {
+    videoElement.pause();
+    videoElement.srcObject = null;
+    videoElement = null;
   }
 
   if (preview.srcObject) {
