@@ -98,9 +98,8 @@ async function startApp() {
     canvas.height = 1280;
     const ctx = canvas.getContext('2d');
 
-    // Timer fisso a 30 FPS stabili per sincronizzare audio e video perfettamente
-    animationFrameId = setInterval(() => {
-      if (videoElement.readyState >= videoElement.HAVE_CURRENT_DATA) {
+    function drawVideoToCanvas() {
+      if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
         const vWidth = videoElement.videoWidth;
         const vHeight = videoElement.videoHeight;
 
@@ -125,22 +124,18 @@ async function startApp() {
         ctx.drawImage(videoElement, sX, sY, sWidth, sHeight, -canvas.width, 0, canvas.width, canvas.height);
         ctx.restore();
       }
-    }, 1000 / 30);
+      animationFrameId = requestAnimationFrame(drawVideoToCanvas);
+    }
+    drawVideoToCanvas();
 
-    // Uniamo direttamente lo stream del canvas con la traccia audio nativa (metodo standard più stabile)
     canvasStream = canvas.captureStream(30);
     const audioTrack = stream.getAudioTracks()[0];
     if (audioTrack) {
       canvasStream.addTrack(audioTrack);
     }
 
-    // Usiamo WebM con VP9 e Opus: lo standard perfetto per compatibilità canvas/audio su browser
-    let options = { mimeType: 'video/webm;codecs=vp9,opus' };
-    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-      options = { mimeType: 'video/webm' };
-    }
-
-    recorder = new MediaRecorder(canvasStream, options);
+    // Torniamo al formato nativo originale che agganciava perfettamente audio e video
+    recorder = new MediaRecorder(canvasStream, { mimeType: 'video/webm;codecs=vp9,opus' });
     chunks = [];
     recorder.ondataavailable = e => { if (e.data && e.data.size > 0) chunks.push(e.data); };
     recorder.onstop = saveVideo;
@@ -201,7 +196,7 @@ async function toggleRecord() {
 function stopRecording() {
   clearInterval(countdownInterval);
   clearInterval(prepCountdownInterval);
-  clearInterval(animationFrameId);
+  cancelAnimationFrame(animationFrameId);
 
   document.getElementById('countdown-overlay').classList.add('hidden');
 
@@ -216,6 +211,7 @@ function stopRecording() {
 }
 
 function saveVideo() {
+  cancelAnimationFrame(animationFrameId);
   const blob = new Blob(chunks, { type: 'video/webm' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -231,7 +227,7 @@ function toggleMirror() {
 function exitApp() {
   clearInterval(countdownInterval);
   clearInterval(prepCountdownInterval);
-  clearInterval(animationFrameId);
+  cancelAnimationFrame(animationFrameId);
 
   const videoElement = document.getElementById('preview');
   if (videoElement.srcObject) {
