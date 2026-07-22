@@ -98,8 +98,9 @@ async function startApp() {
     canvas.height = 1280;
     const ctx = canvas.getContext('2d');
 
-    function drawVideoToCanvas() {
-      if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
+    // Timer fisso a 30 FPS stabili per sincronizzare audio e video perfettamente
+    animationFrameId = setInterval(() => {
+      if (videoElement.readyState >= videoElement.HAVE_CURRENT_DATA) {
         const vWidth = videoElement.videoWidth;
         const vHeight = videoElement.videoHeight;
 
@@ -124,26 +125,19 @@ async function startApp() {
         ctx.drawImage(videoElement, sX, sY, sWidth, sHeight, -canvas.width, 0, canvas.width, canvas.height);
         ctx.restore();
       }
-      animationFrameId = requestAnimationFrame(drawVideoToCanvas);
-    }
-    drawVideoToCanvas();
+    }, 1000 / 30);
 
+    // Uniamo direttamente lo stream del canvas con la traccia audio nativa (metodo standard più stabile)
     canvasStream = canvas.captureStream(30);
     const audioTrack = stream.getAudioTracks()[0];
     if (audioTrack) {
       canvasStream.addTrack(audioTrack);
     }
 
-    // Tentiamo di registrare direttamente in MP4 se il browser lo supporta (supportato su Chrome/Oppo moderni)
-    let options = { mimeType: 'video/mp4;codecs=avc3.4d401f,opus' };
+    // Usiamo WebM con VP9 e Opus: lo standard perfetto per compatibilità canvas/audio su browser
+    let options = { mimeType: 'video/webm;codecs=vp9,opus' };
     if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-      options = { mimeType: 'video/mp4;codecs=avc3' };
-    }
-    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-      options = { mimeType: 'video/mp4' }; // Fallback generico MP4
-    }
-    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-      options = { mimeType: 'video/webm;codecs=vp9,opus' }; // Fallback estremo
+      options = { mimeType: 'video/webm' };
     }
 
     recorder = new MediaRecorder(canvasStream, options);
@@ -207,6 +201,7 @@ async function toggleRecord() {
 function stopRecording() {
   clearInterval(countdownInterval);
   clearInterval(prepCountdownInterval);
+  clearInterval(animationFrameId);
 
   document.getElementById('countdown-overlay').classList.add('hidden');
 
@@ -221,17 +216,11 @@ function stopRecording() {
 }
 
 function saveVideo() {
-  cancelAnimationFrame(animationFrameId);
-
-  // Sceglie l'estensione in base al formato registrato
-  const mime = recorder.mimeType || '';
-  const extension = mime.includes('mp4') ? 'mp4' : 'webm';
-
-  const blob = new Blob(chunks, { type: mime.includes('mp4') ? 'video/mp4' : 'video/webm' });
+  const blob = new Blob(chunks, { type: 'video/webm' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `monologo_${new Date().getTime()}.${extension}`;
+  a.download = `monologo_${new Date().getTime()}.webm`;
   a.click();
 }
 
@@ -242,7 +231,8 @@ function toggleMirror() {
 function exitApp() {
   clearInterval(countdownInterval);
   clearInterval(prepCountdownInterval);
-  cancelAnimationFrame(animationFrameId);
+  clearInterval(animationFrameId);
+
   const videoElement = document.getElementById('preview');
   if (videoElement.srcObject) {
     videoElement.srcObject.getTracks().forEach(track => track.stop());
