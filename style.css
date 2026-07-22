@@ -13,10 +13,11 @@
     100% { transform: scale(1); opacity: 1; }
 }
 
-/* FIX VISIBILITÀ: Video a piena luminosità */
+/* FIX VISIBILITÀ: Video a piena luminosità e 9:16 forzato */
 video {
     filter: none !important; /* Rimuove ogni filtro scuro */
     object-fit: cover;
+    aspect-ratio: 9 / 16;
 }
 
 /* Gradiente per proteggere la leggibilità del testo senza scurire tutto il video */
@@ -31,4 +32,9 @@ video {
 
 #prompter-overlay {
     z-index: 10;
+}
+
+/* Classe per specchiare il testo del prompter */
+.mirror-text {
+    transform: scaleX(-1);
 }
