@@ -2,6 +2,8 @@ let recorder;
 let chunks = [];
 let canvasStream;
 let animationFrameId;
+let countdownInterval;
+let timeLeft = 60;
 let scripts = JSON.parse(localStorage.getItem('my_monologues')) || {};
 
 const setupScreen = document.getElementById('setup-screen');
@@ -90,19 +92,16 @@ async function startApp() {
     videoElement.srcObject = stream;
     await videoElement.play();
 
-    // Creiamo un canvas nascosto per forzare il ritaglio geometrico 9:16 (es. 720x1280)
     const canvas = document.createElement('canvas');
     canvas.width = 720;
     canvas.height = 1280;
     const ctx = canvas.getContext('2d');
 
-    // Funzione che ridisegna ogni fotogramma tagliandolo in 9:16 esatto
     function drawVideoToCanvas() {
       if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
         const vWidth = videoElement.videoWidth;
         const vHeight = videoElement.videoHeight;
 
-        // Calcolo per il crop centrale (ogget-fit: cover)
         const targetRatio = 9 / 16;
         const currentRatio = vWidth / vHeight;
 
@@ -120,7 +119,6 @@ async function startApp() {
         }
 
         ctx.save();
-        // Effetto speculare (mirror) integrato direttamente nel canvas salvato
         ctx.scale(-1, 1);
         ctx.drawImage(videoElement, sX, sY, sWidth, sHeight, -canvas.width, 0, canvas.width, canvas.height);
         ctx.restore();
@@ -129,8 +127,7 @@ async function startApp() {
     }
     drawVideoToCanvas();
 
-    // Catturiamo lo stream dal canvas pulito unendo l'audio del microfono
-    canvasStream = canvas.captureStream(30); // 30 fps
+    canvasStream = canvas.captureStream(30);
     const audioTrack = stream.getAudioTracks()[0];
     if (audioTrack) {
       canvasStream.addTrack(audioTrack);
@@ -152,14 +149,39 @@ function toggleRecord() {
   const btn = document.getElementById('recBtn');
   if (recorder.state === "inactive") {
     chunks = [];
-    recorder.start();
-    btn.innerText = "STOP";
+    timeLeft = 60;
     btn.classList.add('is-recording');
+
+    // Aggiorna subito il testo del bottone con il timer iniziale
+    btn.innerText = `${timeLeft}s`;
+
+    // Avvia la registrazione
+    recorder.start();
+
+    // Fa partire il conto alla rovescia ogni secondo
+    countdownInterval = setInterval(() => {
+      timeLeft--;
+      if (timeLeft > 0) {
+        btn.innerText = `${timeLeft}s`;
+      } else {
+        btn.innerText = "0s";
+        stopRecording(); // Ferma automaticamente a 0 secondi
+      }
+    }, 1000);
+
   } else {
-    recorder.stop();
-    btn.innerText = "REC";
-    btn.classList.remove('is-recording');
+    stopRecording();
   }
+}
+
+function stopRecording() {
+  clearInterval(countdownInterval);
+  if (recorder && recorder.state !== "inactive") {
+    recorder.stop();
+  }
+  const btn = document.getElementById('recBtn');
+  btn.innerText = "REC";
+  btn.classList.remove('is-recording');
 }
 
 function saveVideo() {
@@ -177,6 +199,7 @@ function toggleMirror() {
 }
 
 function exitApp() {
+  clearInterval(countdownInterval);
   cancelAnimationFrame(animationFrameId);
   const videoElement = document.getElementById('preview');
   if (videoElement.srcObject) {

@@ -47,9 +47,17 @@
         </div>
     </div>
 
-    <div id="recording-screen" class="hidden relative h-full w-full bg-black">
-        <video id="preview" autoplay muted playsinline
-            class="absolute inset-0 w-full h-full object-cover scale-x-[-1]"></video>
+    <div id="recording-screen"
+        class="hidden relative h-full w-full bg-black flex justify-center items-center overflow-hidden">
+
+        <!-- Anteprima Video -->
+        <video id="preview" autoplay muted playsinline class="absolute inset-0 w-full h-full object-cover"></video>
+
+        <!-- Timer Visivo in alto durante la registrazione (Nascosto finché non parte REC) -->
+        <div id="timer-display"
+            class="absolute top-6 z-30 hidden bg-black/60 backdrop-blur-md px-4 py-1.5 rounded-full border border-red-500/50 text-red-400 font-mono font-bold text-lg tracking-wider shadow-lg">
+            🔴 <span id="timer-countdown">60</span>s
+        </div>
 
         <div id="prompter-overlay"
             class="absolute inset-0 z-10 overflow-y-auto py-[50vh] px-8 text-center scroll-smooth">
