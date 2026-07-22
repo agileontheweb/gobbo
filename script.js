@@ -85,10 +85,16 @@ async function startApp() {
   liveFontVal.innerText = savedSize + "px";
 
   try {
+    // QUI STA IL SEGRETO PER IL VIDEO VERTICALE
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user" },
+      video: {
+        facingMode: "user",
+        width: { ideal: 1080, min: 720 },  // Forza l'altezza maggiore della larghezza
+        height: { ideal: 1920, min: 1280 }
+      },
       audio: true
     });
+
     document.getElementById('preview').srcObject = stream;
 
     recorder = new MediaRecorder(stream);
@@ -98,7 +104,7 @@ async function startApp() {
     setupScreen.classList.add('hidden');
     recScreen.classList.remove('hidden');
   } catch (err) {
-    alert("Accesso camera negato: " + err);
+    alert("Errore camera: " + err.message);
   }
 }
 
