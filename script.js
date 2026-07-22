@@ -84,37 +84,11 @@ async function startApp() {
   prompterText.style.fontSize = savedSize + "px";
   liveFontVal.innerText = savedSize + "px";
 
-  // Creiamo una lista di tentativi (dal meglio al peggiore)
-  const videoConstraints = [
-    // 1. Tentativo: Full HD Verticale (Solo "ideal", senza forzare il "min")
-    { video: { facingMode: "user", width: { ideal: 1080 }, height: { ideal: 1920 } }, audio: true },
-    // 2. Tentativo: HD Verticale
-    { video: { facingMode: "user", width: { ideal: 720 }, height: { ideal: 1280 } }, audio: true },
-    // 3. Tentativo: Default (se l'OPPO è testardo, prende quello che dà)
-    { video: { facingMode: "user" }, audio: true }
-  ];
-
-  let stream = null;
-  let errorDettagli = "";
-
-  // Cicla tra i tentativi finché non ottiene la telecamera
-  for (let i = 0; i < videoConstraints.length; i++) {
-    try {
-      stream = await navigator.mediaDevices.getUserMedia(videoConstraints[i]);
-      break; // Se funziona, esci dal ciclo!
-    } catch (err) {
-      errorDettagli = err.message; // Salva l'errore per dopo
-      stream = null;
-    }
-  }
-
-  // Se dopo 3 tentativi stream è ancora null, la telecamera è irraggiungibile
-  if (!stream) {
-    return alert("Impossibile accedere alla camera. Dettagli: " + errorDettagli);
-  }
-
-  // Se arriviamo qui, la telecamera funziona!
   try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user" },
+      audio: true
+    });
     document.getElementById('preview').srcObject = stream;
 
     recorder = new MediaRecorder(stream);
@@ -124,7 +98,7 @@ async function startApp() {
     setupScreen.classList.add('hidden');
     recScreen.classList.remove('hidden');
   } catch (err) {
-    alert("Errore avvio recorder: " + err.message);
+    alert("Accesso camera negato: " + err);
   }
 }
 
