@@ -3,6 +3,7 @@ let chunks = [];
 let canvasStream;
 let animationFrameId;
 let countdownInterval;
+let prepCountdownInterval;
 let timeLeft = 60;
 let scripts = JSON.parse(localStorage.getItem('my_monologues')) || {};
 
@@ -133,7 +134,19 @@ async function startApp() {
       canvasStream.addTrack(audioTrack);
     }
 
-    recorder = new MediaRecorder(canvasStream, { mimeType: 'video/webm;codecs=vp9,opus' });
+    // Tentiamo di registrare direttamente in MP4 se il browser lo supporta (supportato su Chrome/Oppo moderni)
+    let options = { mimeType: 'video/mp4;codecs=avc3.4d401f,opus' };
+    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+      options = { mimeType: 'video/mp4;codecs=avc3' };
+    }
+    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+      options = { mimeType: 'video/mp4' }; // Fallback generico MP4
+    }
+    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+      options = { mimeType: 'video/webm;codecs=vp9,opus' }; // Fallback estremo
+    }
+
+    recorder = new MediaRecorder(canvasStream, options);
     chunks = [];
     recorder.ondataavailable = e => { if (e.data && e.data.size > 0) chunks.push(e.data); };
     recorder.onstop = saveVideo;
@@ -145,27 +158,44 @@ async function startApp() {
   }
 }
 
-function toggleRecord() {
+async function toggleRecord() {
   const btn = document.getElementById('recBtn');
+
   if (recorder.state === "inactive") {
-    chunks = [];
-    timeLeft = 60;
-    btn.classList.add('is-recording');
+    btn.disabled = true;
 
-    // Aggiorna subito il testo del bottone con il timer iniziale
-    btn.innerText = `${timeLeft}s`;
+    const countdownOverlay = document.getElementById('countdown-overlay');
+    const countdownNumber = document.getElementById('countdown-number');
 
-    // Avvia la registrazione
-    recorder.start();
+    countdownOverlay.classList.remove('hidden');
+    let prepSeconds = 3;
+    countdownNumber.innerText = prepSeconds;
 
-    // Fa partire il conto alla rovescia ogni secondo
-    countdownInterval = setInterval(() => {
-      timeLeft--;
-      if (timeLeft > 0) {
-        btn.innerText = `${timeLeft}s`;
+    prepCountdownInterval = setInterval(() => {
+      prepSeconds--;
+      if (prepSeconds > 0) {
+        countdownNumber.innerText = prepSeconds;
       } else {
-        btn.innerText = "0s";
-        stopRecording(); // Ferma automaticamente a 0 secondi
+        clearInterval(prepCountdownInterval);
+        countdownOverlay.classList.add('hidden');
+        btn.disabled = false;
+
+        chunks = [];
+        timeLeft = 60;
+        btn.classList.add('is-recording');
+        btn.innerText = `${timeLeft}s`;
+
+        recorder.start();
+
+        countdownInterval = setInterval(() => {
+          timeLeft--;
+          if (timeLeft > 0) {
+            btn.innerText = `${timeLeft}s`;
+          } else {
+            btn.innerText = "0s";
+            stopRecording();
+          }
+        }, 1000);
       }
     }, 1000);
 
@@ -176,21 +206,32 @@ function toggleRecord() {
 
 function stopRecording() {
   clearInterval(countdownInterval);
+  clearInterval(prepCountdownInterval);
+
+  document.getElementById('countdown-overlay').classList.add('hidden');
+
   if (recorder && recorder.state !== "inactive") {
     recorder.stop();
   }
+
   const btn = document.getElementById('recBtn');
+  btn.disabled = false;
   btn.innerText = "REC";
   btn.classList.remove('is-recording');
 }
 
 function saveVideo() {
   cancelAnimationFrame(animationFrameId);
-  const blob = new Blob(chunks, { type: 'video/webm' });
+
+  // Sceglie l'estensione in base al formato registrato
+  const mime = recorder.mimeType || '';
+  const extension = mime.includes('mp4') ? 'mp4' : 'webm';
+
+  const blob = new Blob(chunks, { type: mime.includes('mp4') ? 'video/mp4' : 'video/webm' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `monologo_${new Date().getTime()}.webm`;
+  a.download = `monologo_${new Date().getTime()}.${extension}`;
   a.click();
 }
 
@@ -200,6 +241,7 @@ function toggleMirror() {
 
 function exitApp() {
   clearInterval(countdownInterval);
+  clearInterval(prepCountdownInterval);
   cancelAnimationFrame(animationFrameId);
   const videoElement = document.getElementById('preview');
   if (videoElement.srcObject) {

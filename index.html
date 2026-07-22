@@ -53,11 +53,12 @@
         <!-- Anteprima Video -->
         <video id="preview" autoplay muted playsinline class="absolute inset-0 w-full h-full object-cover"></video>
 
-        <!-- Timer Visivo in alto durante la registrazione (Nascosto finché non parte REC) -->
-        <div id="timer-display"
-            class="absolute top-6 z-30 hidden bg-black/60 backdrop-blur-md px-4 py-1.5 rounded-full border border-red-500/50 text-red-400 font-mono font-bold text-lg tracking-wider shadow-lg">
-            🔴 <span id="timer-countdown">60</span>s
+        <div id="countdown-overlay"
+            class="absolute inset-0 z-40 hidden bg-black/80 backdrop-blur-sm flex justify-center items-center">
+            <span id="countdown-number" class="text-8xl font-black text-green-400 animate-pulse">3</span>
         </div>
+
+
 
         <div id="prompter-overlay"
             class="absolute inset-0 z-10 overflow-y-auto py-[50vh] px-8 text-center scroll-smooth">
