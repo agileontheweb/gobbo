@@ -3,11 +3,7 @@ let chunks = [];
 let scripts = JSON.parse(localStorage.getItem('my_monologues')) || {};
 let isRecording = false;
 let mediaStream = null;
-let canvasStream = null;
 let animationId = null;
-let videoElement = null;
-let audioContext = null;
-let audioDestination = null;
 
 // Elementi DOM
 const setupScreen = document.getElementById('setup-screen');
@@ -91,7 +87,7 @@ async function startApp() {
   const text = textArea.value.trim();
   if (!text) return alert("Inserisci un testo prima di iniziare!");
 
-  // Autosave prima di partire
+  // Autosave
   const title = titleInput.value.trim();
   if (title) {
     scripts[title] = text;
@@ -108,12 +104,14 @@ async function startApp() {
   liveFontVal.innerText = savedSize + "px";
 
   try {
-    // 1. Ottieni stream dalla camera
+    // 🇮🇹 SOLUZIONE: Registra direttamente dalla camera in 9:16
+    // Chiediamo alla camera di registrare in verticale (9:16)
     mediaStream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: "user",
-        width: { ideal: 1920 },
-        height: { ideal: 1080 }
+        width: { ideal: 720 },
+        height: { ideal: 1280 }, // 9:16 ratio
+        aspectRatio: 9 / 16
       },
       audio: {
         echoCancellation: true,
@@ -122,86 +120,21 @@ async function startApp() {
       }
     });
 
-    // 2. Crea elemento video nascosto per processare i frame
-    videoElement = document.createElement('video');
-    videoElement.srcObject = mediaStream;
-    videoElement.setAttribute('playsinline', '');
-    videoElement.muted = true;
-    await videoElement.play();
+    // Preview direttamente dalla camera (senza canvas!)
+    preview.srcObject = mediaStream;
 
-    // 3. Crea canvas in 9:16
-    const canvas = document.createElement('canvas');
-    const CANVAS_WIDTH = 1080;
-    const CANVAS_HEIGHT = 1920;
-    canvas.width = CANVAS_WIDTH;
-    canvas.height = CANVAS_HEIGHT;
-    const ctx = canvas.getContext('2d');
-
-    // 4. Stream dal canvas (SOLO VIDEO, senza audio)
-    // Usiamo 60fps per sincronizzare meglio
-    canvasStream = canvas.captureStream(60);
-
-    // 5. NON aggiungiamo audio qui - lo faremo dopo con un mix
-    // Invece, prendiamo l'audio originale e lo usiamo separatamente
-
-    // 6. Funzione che disegna il video
-    function drawFrame() {
-      if (!videoElement || !videoElement.videoWidth) {
-        animationId = requestAnimationFrame(drawFrame);
-        return;
-      }
-
-      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-      const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
-      const canvasAspect = CANVAS_WIDTH / CANVAS_HEIGHT;
-
-      let sx, sy, sw, sh;
-
-      if (videoAspect > canvasAspect) {
-        sh = videoElement.videoHeight;
-        sw = videoElement.videoHeight * canvasAspect;
-        sx = (videoElement.videoWidth - sw) / 2;
-        sy = 0;
-      } else {
-        sw = videoElement.videoWidth;
-        sh = videoElement.videoWidth / canvasAspect;
-        sx = 0;
-        sy = (videoElement.videoHeight - sh) / 2;
-      }
-
-      ctx.drawImage(videoElement, sx, sy, sw, sh, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-      animationId = requestAnimationFrame(drawFrame);
-    }
-
-    // 7. AVVIA IL DISEGNO
-    drawFrame();
-
-    // 8. CREA UN NUOVO STREAM COMBINATO
-    // Prendiamo la traccia video dal canvas e l'audio dallo stream originale
-    const videoTrack = canvasStream.getVideoTracks()[0];
-    const audioTrack = mediaStream.getAudioTracks()[0];
-
-    // Crea un nuovo stream con video + audio
-    const combinedStream = new MediaStream();
-    combinedStream.addTrack(videoTrack);
-    if (audioTrack) {
-      combinedStream.addTrack(audioTrack.clone());
-    }
-
-    // 9. Crea il recorder con lo stream combinato
+    // Crea recorder direttamente dallo stream della camera
     let mimeType = 'video/mp4';
     if (!MediaRecorder.isTypeSupported('video/mp4')) {
       mimeType = 'video/webm;codecs=vp9,opus';
       if (!MediaRecorder.isTypeSupported(mimeType)) {
         mimeType = 'video/webm;codecs=vp8,opus';
       }
-      console.log('MP4 non supportato, uso:', mimeType);
     }
 
-    recorder = new MediaRecorder(combinedStream, {
+    recorder = new MediaRecorder(mediaStream, {
       mimeType: mimeType,
-      videoBitsPerSecond: 8000000,
+      videoBitsPerSecond: 5000000, // 5 Mbps per qualità decente
       audioBitsPerSecond: 128000
     });
 
@@ -213,18 +146,11 @@ async function startApp() {
       saveVideo();
     };
 
-    // 10. MOSTRA L'ANTEPRIMA
-    preview.srcObject = canvasStream;
-
     setupScreen.classList.add('hidden');
     recScreen.classList.remove('hidden');
     isRecording = false;
-    recBtn.innerText = "🎬 REC";
+    recBtn.innerText = "REC";
     recBtn.classList.remove('is-recording');
-
-    // Salva riferimenti per cleanup
-    window._canvasElement = canvas;
-    window._combinedStream = combinedStream;
 
   } catch (err) {
     alert("Errore accesso camera/microfono: " + err.message);
@@ -239,19 +165,19 @@ function toggleRecord() {
     chunks = [];
     try {
       recorder.start(1000);
-      recBtn.innerText = "⏹ STOP";
+      recBtn.innerText = "STOP";
       recBtn.classList.add('is-recording');
       isRecording = true;
-      console.log('📹 Registrazione 9:16 iniziata! (Audio sincronizzato)');
+      console.log('📹 Registrazione 9:16 iniziata!');
     } catch (e) {
       console.error('Errore start registrazione:', e);
     }
   } else {
     recorder.stop();
-    recBtn.innerText = "🎬 REC";
+    recBtn.innerText = "REC";
     recBtn.classList.remove('is-recording');
     isRecording = false;
-    console.log('⏹ Registrazione fermata, salvataggio...');
+    console.log('⏹ Registrazione fermata');
   }
 }
 
@@ -272,7 +198,7 @@ function saveVideo() {
   }
 
   const blob = new Blob(chunks, { type: mimeType });
-  console.log(`📊 Video salvato: ${(blob.size / 1024 / 1024).toFixed(2)} MB, formato 1080x1920 (9:16)`);
+  console.log(`📊 Video salvato: ${(blob.size / 1024 / 1024).toFixed(2)} MB`);
 
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -285,7 +211,7 @@ function saveVideo() {
   document.body.removeChild(a);
 
   setTimeout(() => URL.revokeObjectURL(url), 10000);
-  showNotification(`✅ Video salvato in 9:16! (${extension.toUpperCase()})`);
+  showNotification(`✅ Video salvato in 9:16!`);
 
   chunks = [];
 }
@@ -295,37 +221,15 @@ function toggleMirror() {
 }
 
 function exitApp() {
-  if (animationId) {
-    cancelAnimationFrame(animationId);
-    animationId = null;
-  }
-
   if (recorder && recorder.state !== "inactive") {
     try {
       recorder.stop();
     } catch (e) { }
   }
 
-  // Pulisci combined stream
-  if (window._combinedStream) {
-    window._combinedStream.getTracks().forEach(track => track.stop());
-    window._combinedStream = null;
-  }
-
-  if (canvasStream) {
-    canvasStream.getTracks().forEach(track => track.stop());
-    canvasStream = null;
-  }
-
   if (mediaStream) {
     mediaStream.getTracks().forEach(track => track.stop());
     mediaStream = null;
-  }
-
-  if (videoElement) {
-    videoElement.pause();
-    videoElement.srcObject = null;
-    videoElement = null;
   }
 
   if (preview.srcObject) {
@@ -338,7 +242,7 @@ function exitApp() {
   isRecording = false;
 
   loadSavedFontSize();
-  showNotification("👋 Uscito dalla registrazione");
+  showNotification("👋 Uscito");
 }
 
 function showNotification(msg) {
@@ -366,7 +270,6 @@ function showNotification(msg) {
   }, 2500);
 }
 
-// CSS per notifiche
 const style = document.createElement('style');
 style.textContent = `
   @keyframes slideIn {
