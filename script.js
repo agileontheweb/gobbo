@@ -6,6 +6,8 @@ let mediaStream = null;
 let canvasStream = null;
 let animationId = null;
 let videoElement = null;
+let audioContext = null;
+let audioDestination = null;
 
 // Elementi DOM
 const setupScreen = document.getElementById('setup-screen');
@@ -106,14 +108,18 @@ async function startApp() {
   liveFontVal.innerText = savedSize + "px";
 
   try {
-    // 1. Ottieni stream dalla camera in alta qualità
+    // 1. Ottieni stream dalla camera
     mediaStream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: "user",
         width: { ideal: 1920 },
         height: { ideal: 1080 }
       },
-      audio: true
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
     });
 
     // 2. Crea elemento video nascosto per processare i frame
@@ -123,22 +129,22 @@ async function startApp() {
     videoElement.muted = true;
     await videoElement.play();
 
-    // 3. Crea canvas in 9:16 (VERTICALE)
+    // 3. Crea canvas in 9:16
     const canvas = document.createElement('canvas');
-    const CANVAS_WIDTH = 1080;   // 9:16 ratio
+    const CANVAS_WIDTH = 1080;
     const CANVAS_HEIGHT = 1920;
     canvas.width = CANVAS_WIDTH;
     canvas.height = CANVAS_HEIGHT;
     const ctx = canvas.getContext('2d');
 
-    // 4. Stream dal canvas (questo sarà in 9:16!)
-    canvasStream = canvas.captureStream(30);
+    // 4. Stream dal canvas (SOLO VIDEO, senza audio)
+    // Usiamo 60fps per sincronizzare meglio
+    canvasStream = canvas.captureStream(60);
 
-    // 5. COPIA l'audio dallo stream originale al canvas stream
-    const audioTracks = mediaStream.getAudioTracks();
-    audioTracks.forEach(track => canvasStream.addTrack(track));
+    // 5. NON aggiungiamo audio qui - lo faremo dopo con un mix
+    // Invece, prendiamo l'audio originale e lo usiamo separatamente
 
-    // 6. Funzione che disegna il video ruotato sul canvas
+    // 6. Funzione che disegna il video
     function drawFrame() {
       if (!videoElement || !videoElement.videoWidth) {
         animationId = requestAnimationFrame(drawFrame);
@@ -147,35 +153,43 @@ async function startApp() {
 
       ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-      // Calcola il crop per riempire lo schermo verticale
       const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
       const canvasAspect = CANVAS_WIDTH / CANVAS_HEIGHT;
 
       let sx, sy, sw, sh;
 
       if (videoAspect > canvasAspect) {
-        // Video più largo: taglia i lati
         sh = videoElement.videoHeight;
         sw = videoElement.videoHeight * canvasAspect;
         sx = (videoElement.videoWidth - sw) / 2;
         sy = 0;
       } else {
-        // Video più alto: taglia sopra/sotto
         sw = videoElement.videoWidth;
         sh = videoElement.videoWidth / canvasAspect;
         sx = 0;
         sy = (videoElement.videoHeight - sh) / 2;
       }
 
-      // Disegna il video nel canvas (già in 9:16)
       ctx.drawImage(videoElement, sx, sy, sw, sh, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-      // Continua il loop
       animationId = requestAnimationFrame(drawFrame);
     }
 
-    // 7. Crea il recorder con lo stream del canvas
-    // Prova prima MP4, se non supportato usa WebM
+    // 7. AVVIA IL DISEGNO
+    drawFrame();
+
+    // 8. CREA UN NUOVO STREAM COMBINATO
+    // Prendiamo la traccia video dal canvas e l'audio dallo stream originale
+    const videoTrack = canvasStream.getVideoTracks()[0];
+    const audioTrack = mediaStream.getAudioTracks()[0];
+
+    // Crea un nuovo stream con video + audio
+    const combinedStream = new MediaStream();
+    combinedStream.addTrack(videoTrack);
+    if (audioTrack) {
+      combinedStream.addTrack(audioTrack.clone());
+    }
+
+    // 9. Crea il recorder con lo stream combinato
     let mimeType = 'video/mp4';
     if (!MediaRecorder.isTypeSupported('video/mp4')) {
       mimeType = 'video/webm;codecs=vp9,opus';
@@ -185,9 +199,10 @@ async function startApp() {
       console.log('MP4 non supportato, uso:', mimeType);
     }
 
-    recorder = new MediaRecorder(canvasStream, {
+    recorder = new MediaRecorder(combinedStream, {
       mimeType: mimeType,
-      videoBitsPerSecond: 8000000 // 8 Mbps per alta qualità
+      videoBitsPerSecond: 8000000,
+      audioBitsPerSecond: 128000
     });
 
     recorder.ondataavailable = e => {
@@ -198,15 +213,8 @@ async function startApp() {
       saveVideo();
     };
 
-    // 8. Avvia il disegno dei frame
-    drawFrame();
-
-    // 9. MOSTRA L'ANTEPRIMA - Mostra lo stream del canvas (già in 9:16)
+    // 10. MOSTRA L'ANTEPRIMA
     preview.srcObject = canvasStream;
-    // Forza il preview a mantenere 9:16
-    preview.style.objectFit = 'cover';
-    preview.style.width = '100%';
-    preview.style.height = '100%';
 
     setupScreen.classList.add('hidden');
     recScreen.classList.remove('hidden');
@@ -214,8 +222,9 @@ async function startApp() {
     recBtn.innerText = "🎬 REC";
     recBtn.classList.remove('is-recording');
 
-    // Salva canvas per cleanup
+    // Salva riferimenti per cleanup
     window._canvasElement = canvas;
+    window._combinedStream = combinedStream;
 
   } catch (err) {
     alert("Errore accesso camera/microfono: " + err.message);
@@ -229,11 +238,11 @@ function toggleRecord() {
   if (recorder.state === "inactive") {
     chunks = [];
     try {
-      recorder.start(1000); // Chunk ogni secondo
+      recorder.start(1000);
       recBtn.innerText = "⏹ STOP";
       recBtn.classList.add('is-recording');
       isRecording = true;
-      console.log('📹 Registrazione 9:16 iniziata!');
+      console.log('📹 Registrazione 9:16 iniziata! (Audio sincronizzato)');
     } catch (e) {
       console.error('Errore start registrazione:', e);
     }
@@ -252,7 +261,6 @@ function saveVideo() {
     return;
   }
 
-  // Determina estensione in base al mimeType
   let extension = 'mp4';
   let mimeType = 'video/mp4';
 
@@ -287,46 +295,43 @@ function toggleMirror() {
 }
 
 function exitApp() {
-  // Ferma il loop di animazione
   if (animationId) {
     cancelAnimationFrame(animationId);
     animationId = null;
   }
 
-  // Ferma registrazione
   if (recorder && recorder.state !== "inactive") {
     try {
       recorder.stop();
-    } catch (e) {
-      console.log('Recorder già fermo');
-    }
+    } catch (e) { }
   }
 
-  // Ferma canvas stream
+  // Pulisci combined stream
+  if (window._combinedStream) {
+    window._combinedStream.getTracks().forEach(track => track.stop());
+    window._combinedStream = null;
+  }
+
   if (canvasStream) {
     canvasStream.getTracks().forEach(track => track.stop());
     canvasStream = null;
   }
 
-  // Ferma stream originale
   if (mediaStream) {
     mediaStream.getTracks().forEach(track => track.stop());
     mediaStream = null;
   }
 
-  // Ferma video element nascosto
   if (videoElement) {
     videoElement.pause();
     videoElement.srcObject = null;
     videoElement = null;
   }
 
-  // Pulisci preview
   if (preview.srcObject) {
     preview.srcObject = null;
   }
 
-  // Reset
   chunks = [];
   recScreen.classList.add('hidden');
   setupScreen.classList.remove('hidden');
@@ -336,7 +341,6 @@ function exitApp() {
   showNotification("👋 Uscito dalla registrazione");
 }
 
-// Helper per notifiche
 function showNotification(msg) {
   const notif = document.createElement('div');
   notif.className = 'notification';
@@ -362,7 +366,7 @@ function showNotification(msg) {
   }, 2500);
 }
 
-// Aggiungi CSS per animazioni notifiche
+// CSS per notifiche
 const style = document.createElement('style');
 style.textContent = `
   @keyframes slideIn {
