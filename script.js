@@ -127,6 +127,16 @@ async function startApp() {
     videoElement.muted = true;
     await videoElement.play();
 
+    const videoTrack = mediaStream.getVideoTracks()[0];
+    const capabilities = videoTrack.getCapabilities();
+
+    let msg = '📷 FOCUS SUPPORT:\n\n';
+    msg += 'focusMode: ' + (capabilities.focusMode ? JSON.stringify(capabilities.focusMode) : '❌ non supportato') + '\n\n';
+    msg += 'focusDistance: ' + (capabilities.focusDistance ? JSON.stringify(capabilities.focusDistance) : '❌ non supportato') + '\n\n';
+    msg += 'pointsOfInterest: ' + (capabilities.pointsOfInterest ? '✅ supportato' : '❌ non supportato');
+
+    alert(msg);
+
     // 3. Canvas in 9:16 (VERTICALE) - risoluzione ridotta per performance
     const canvas = document.createElement('canvas');
     const CANVAS_WIDTH = 540;   // 9:16 ratio
