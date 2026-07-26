@@ -401,7 +401,7 @@ const wbVal = document.getElementById('wb-val');
 
 let currentVideoTrack = null;
 
-function setupCameraControls(track) {
+async function setupCameraControls(track) {
   currentVideoTrack = track;
   const capabilities = track.getCapabilities();
 
@@ -417,13 +417,20 @@ function setupCameraControls(track) {
     focusControl.classList.remove('hidden');
     focusControl.classList.add('flex');
 
+    // Imposta la modalità manuale UNA SOLA VOLTA
+    try {
+      await track.applyConstraints({ advanced: [{ focusMode: 'manual' }] });
+      await track.applyConstraints({ advanced: [{ focusDistance: mid }] });
+    } catch (err) {
+      console.warn('Focus manuale iniziale non applicato:', err);
+    }
+
+    // Da qui in poi invia SOLO il valore, mai più la modalità
     focusSlider.oninput = async () => {
       const v = parseFloat(focusSlider.value);
       focusVal.innerText = v.toFixed(2);
       try {
-        await track.applyConstraints({
-          advanced: [{ focusMode: 'manual', focusDistance: v }]
-        });
+        await track.applyConstraints({ advanced: [{ focusDistance: v }] });
       } catch (err) {
         console.error('Errore focus:', err);
       }
@@ -437,25 +444,24 @@ function setupCameraControls(track) {
     exposureSlider.max = max;
     exposureSlider.step = step;
 
-    // Parti da un valore leggermente sotto lo zero (non 0 neutro):
-    // corregge preventivamente i bianchi bruciati tipici delle camere phone in automatico
     const defaultExposure = Math.max(min, -0.5);
     exposureSlider.value = defaultExposure;
     exposureVal.innerText = defaultExposure.toFixed(2);
     exposureControl.classList.remove('hidden');
     exposureControl.classList.add('flex');
 
-    track.applyConstraints({
-      advanced: [{ exposureMode: 'manual', exposureCompensation: defaultExposure }]
-    }).catch(err => console.warn('Esposizione iniziale non applicata:', err));
+    try {
+      await track.applyConstraints({ advanced: [{ exposureMode: 'manual' }] });
+      await track.applyConstraints({ advanced: [{ exposureCompensation: defaultExposure }] });
+    } catch (err) {
+      console.warn('Esposizione iniziale non applicata:', err);
+    }
 
     exposureSlider.oninput = async () => {
       const v = parseFloat(exposureSlider.value);
       exposureVal.innerText = v.toFixed(2);
       try {
-        await track.applyConstraints({
-          advanced: [{ exposureMode: 'manual', exposureCompensation: v }]
-        });
+        await track.applyConstraints({ advanced: [{ exposureCompensation: v }] });
       } catch (err) {
         console.error('Errore esposizione:', err);
       }
@@ -474,13 +480,18 @@ function setupCameraControls(track) {
     wbControl.classList.remove('hidden');
     wbControl.classList.add('flex');
 
+    try {
+      await track.applyConstraints({ advanced: [{ whiteBalanceMode: 'manual' }] });
+      await track.applyConstraints({ advanced: [{ colorTemperature: mid }] });
+    } catch (err) {
+      console.warn('White balance iniziale non applicato:', err);
+    }
+
     wbSlider.oninput = async () => {
       const v = parseInt(wbSlider.value);
       wbVal.innerText = v;
       try {
-        await track.applyConstraints({
-          advanced: [{ whiteBalanceMode: 'manual', colorTemperature: v }]
-        });
+        await track.applyConstraints({ advanced: [{ colorTemperature: v }] });
       } catch (err) {
         console.error('Errore white balance:', err);
       }
