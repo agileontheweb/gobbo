@@ -127,21 +127,6 @@ async function startApp() {
     videoElement.muted = true;
     await videoElement.play();
 
-    const videoTrack = mediaStream.getVideoTracks()[0];
-    const capabilities = videoTrack.getCapabilities();
-
-    let msg = '💡 ESPOSIZIONE E COLORE:\n\n';
-    msg += 'exposureMode: ' + (capabilities.exposureMode ? JSON.stringify(capabilities.exposureMode) : '❌') + '\n\n';
-    msg += 'exposureCompensation: ' + (capabilities.exposureCompensation ? JSON.stringify(capabilities.exposureCompensation) : '❌') + '\n\n';
-    msg += 'exposureTime: ' + (capabilities.exposureTime ? JSON.stringify(capabilities.exposureTime) : '❌') + '\n\n';
-    msg += 'whiteBalanceMode: ' + (capabilities.whiteBalanceMode ? JSON.stringify(capabilities.whiteBalanceMode) : '❌') + '\n\n';
-    msg += 'colorTemperature: ' + (capabilities.colorTemperature ? JSON.stringify(capabilities.colorTemperature) : '❌') + '\n\n';
-    msg += 'brightness: ' + (capabilities.brightness ? JSON.stringify(capabilities.brightness) : '❌') + '\n\n';
-    msg += 'contrast: ' + (capabilities.contrast ? JSON.stringify(capabilities.contrast) : '❌') + '\n\n';
-    msg += 'saturation: ' + (capabilities.saturation ? JSON.stringify(capabilities.saturation) : '❌') + '\n\n';
-    msg += 'sharpness: ' + (capabilities.sharpness ? JSON.stringify(capabilities.sharpness) : '❌');
-
-    alert(msg);
     // 3. Canvas in 9:16 (VERTICALE) - risoluzione ridotta per performance
     const canvas = document.createElement('canvas');
     const CANVAS_WIDTH = 540;   // 9:16 ratio
@@ -239,6 +224,9 @@ async function startApp() {
     window._canvasElement = canvas;
     window._combinedStream = combinedStream;
 
+    // 11. Setup controlli fotocamera (fuoco, esposizione, white balance)
+    setupCameraControls(mediaStream.getVideoTracks()[0]);
+
   } catch (err) {
     alert("Errore accesso camera/microfono: " + err.message);
     console.error(err);
@@ -301,10 +289,6 @@ function saveVideo() {
   showNotification(`✅ Video salvato in 9:16 VERTICALE!`);
 
   chunks = [];
-}
-
-function toggleMirror() {
-  prompterText.classList.toggle('mirror-text');
 }
 
 function exitApp() {
@@ -399,3 +383,142 @@ document.addEventListener('keydown', (e) => {
     exitApp();
   }
 });
+
+// =========================================================
+// CONTROLLI FOTOCAMERA: fuoco, esposizione, white balance
+// =========================================================
+
+const cameraSettingsPanel = document.getElementById('camera-settings-panel');
+const focusControl = document.getElementById('focus-control');
+const focusSlider = document.getElementById('focus-slider');
+const focusVal = document.getElementById('focus-val');
+const exposureControl = document.getElementById('exposure-control');
+const exposureSlider = document.getElementById('exposure-slider');
+const exposureVal = document.getElementById('exposure-val');
+const wbControl = document.getElementById('wb-control');
+const wbSlider = document.getElementById('wb-slider');
+const wbVal = document.getElementById('wb-val');
+
+let currentVideoTrack = null;
+
+function setupCameraControls(track) {
+  currentVideoTrack = track;
+  const capabilities = track.getCapabilities();
+
+  // --- FUOCO ---
+  if (capabilities.focusDistance) {
+    const { min, max, step } = capabilities.focusDistance;
+    focusSlider.min = min;
+    focusSlider.max = max;
+    focusSlider.step = step;
+    const mid = (min + max) / 2;
+    focusSlider.value = mid;
+    focusVal.innerText = mid.toFixed(2);
+    focusControl.classList.remove('hidden');
+    focusControl.classList.add('flex');
+
+    focusSlider.oninput = async () => {
+      const v = parseFloat(focusSlider.value);
+      focusVal.innerText = v.toFixed(2);
+      try {
+        await track.applyConstraints({
+          advanced: [{ focusMode: 'manual', focusDistance: v }]
+        });
+      } catch (err) {
+        console.error('Errore focus:', err);
+      }
+    };
+  }
+
+  // --- ESPOSIZIONE ---
+  if (capabilities.exposureCompensation) {
+    const { min, max, step } = capabilities.exposureCompensation;
+    exposureSlider.min = min;
+    exposureSlider.max = max;
+    exposureSlider.step = step;
+
+    // Parti da un valore leggermente sotto lo zero (non 0 neutro):
+    // corregge preventivamente i bianchi bruciati tipici delle camere phone in automatico
+    const defaultExposure = Math.max(min, -0.5);
+    exposureSlider.value = defaultExposure;
+    exposureVal.innerText = defaultExposure.toFixed(2);
+    exposureControl.classList.remove('hidden');
+    exposureControl.classList.add('flex');
+
+    track.applyConstraints({
+      advanced: [{ exposureMode: 'manual', exposureCompensation: defaultExposure }]
+    }).catch(err => console.warn('Esposizione iniziale non applicata:', err));
+
+    exposureSlider.oninput = async () => {
+      const v = parseFloat(exposureSlider.value);
+      exposureVal.innerText = v.toFixed(2);
+      try {
+        await track.applyConstraints({
+          advanced: [{ exposureMode: 'manual', exposureCompensation: v }]
+        });
+      } catch (err) {
+        console.error('Errore esposizione:', err);
+      }
+    };
+  }
+
+  // --- WHITE BALANCE ---
+  if (capabilities.colorTemperature) {
+    const { min, max, step } = capabilities.colorTemperature;
+    wbSlider.min = min;
+    wbSlider.max = max;
+    wbSlider.step = step;
+    const mid = 5000;
+    wbSlider.value = mid;
+    wbVal.innerText = mid;
+    wbControl.classList.remove('hidden');
+    wbControl.classList.add('flex');
+
+    wbSlider.oninput = async () => {
+      const v = parseInt(wbSlider.value);
+      wbVal.innerText = v;
+      try {
+        await track.applyConstraints({
+          advanced: [{ whiteBalanceMode: 'manual', colorTemperature: v }]
+        });
+      } catch (err) {
+        console.error('Errore white balance:', err);
+      }
+    };
+  }
+}
+
+function toggleCameraSettingsPanel() {
+  cameraSettingsPanel.classList.toggle('hidden');
+}
+
+async function resetCameraSettings() {
+  if (!currentVideoTrack) return;
+  const capabilities = currentVideoTrack.getCapabilities();
+  let resetSomething = false;
+
+  // Applica ogni reset singolarmente e solo se il controllo è supportato,
+  // così un controllo mancante non blocca gli altri né riempie la console di errori
+  if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
+    try {
+      await currentVideoTrack.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+      resetSomething = true;
+    } catch (err) { console.warn('Reset focus non riuscito:', err); }
+  }
+
+  if (capabilities.exposureMode && capabilities.exposureMode.includes('continuous')) {
+    try {
+      await currentVideoTrack.applyConstraints({ advanced: [{ exposureMode: 'continuous' }] });
+      resetSomething = true;
+    } catch (err) { console.warn('Reset esposizione non riuscito:', err); }
+  }
+
+  if (capabilities.whiteBalanceMode && capabilities.whiteBalanceMode.includes('continuous')) {
+    try {
+      await currentVideoTrack.applyConstraints({ advanced: [{ whiteBalanceMode: 'continuous' }] });
+      resetSomething = true;
+    } catch (err) { console.warn('Reset white balance non riuscito:', err); }
+  }
+
+  showNotification(resetSomething ? '↺ Impostazioni automatiche ripristinate' : 'Nessun controllo manuale attivo su questo dispositivo');
+}
