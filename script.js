@@ -130,13 +130,18 @@ async function startApp() {
     const videoTrack = mediaStream.getVideoTracks()[0];
     const capabilities = videoTrack.getCapabilities();
 
-    let msg = '📷 FOCUS SUPPORT:\n\n';
-    msg += 'focusMode: ' + (capabilities.focusMode ? JSON.stringify(capabilities.focusMode) : '❌ non supportato') + '\n\n';
-    msg += 'focusDistance: ' + (capabilities.focusDistance ? JSON.stringify(capabilities.focusDistance) : '❌ non supportato') + '\n\n';
-    msg += 'pointsOfInterest: ' + (capabilities.pointsOfInterest ? '✅ supportato' : '❌ non supportato');
+    let msg = '💡 ESPOSIZIONE E COLORE:\n\n';
+    msg += 'exposureMode: ' + (capabilities.exposureMode ? JSON.stringify(capabilities.exposureMode) : '❌') + '\n\n';
+    msg += 'exposureCompensation: ' + (capabilities.exposureCompensation ? JSON.stringify(capabilities.exposureCompensation) : '❌') + '\n\n';
+    msg += 'exposureTime: ' + (capabilities.exposureTime ? JSON.stringify(capabilities.exposureTime) : '❌') + '\n\n';
+    msg += 'whiteBalanceMode: ' + (capabilities.whiteBalanceMode ? JSON.stringify(capabilities.whiteBalanceMode) : '❌') + '\n\n';
+    msg += 'colorTemperature: ' + (capabilities.colorTemperature ? JSON.stringify(capabilities.colorTemperature) : '❌') + '\n\n';
+    msg += 'brightness: ' + (capabilities.brightness ? JSON.stringify(capabilities.brightness) : '❌') + '\n\n';
+    msg += 'contrast: ' + (capabilities.contrast ? JSON.stringify(capabilities.contrast) : '❌') + '\n\n';
+    msg += 'saturation: ' + (capabilities.saturation ? JSON.stringify(capabilities.saturation) : '❌') + '\n\n';
+    msg += 'sharpness: ' + (capabilities.sharpness ? JSON.stringify(capabilities.sharpness) : '❌');
 
     alert(msg);
-
     // 3. Canvas in 9:16 (VERTICALE) - risoluzione ridotta per performance
     const canvas = document.createElement('canvas');
     const CANVAS_WIDTH = 540;   // 9:16 ratio
